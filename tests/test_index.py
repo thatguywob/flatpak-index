@@ -4,7 +4,6 @@ import json
 import os
 import re
 import unittest
-import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 from xml.etree import ElementTree
@@ -17,23 +16,18 @@ REQUIRED_LABELS = {
     "org.flatpak.commit",
     "org.flatpak.timestamp",
 }
-SERVED_INDEX_URL = "https://tunaos.org/flatpak/index/static"
 
 
 def load_index():
+    # The served catalog lives in tuna-os/docs. check-metadata.yml downloads it
+    # and sets FLATPAK_INDEX_FILE; the PR suite does not depend on production.
     index_file = os.environ.get("FLATPAK_INDEX_FILE")
     if index_file:
         return json.loads(Path(index_file).read_text())
     served_local = ROOT / "served-index.json"
     if served_local.is_file():
         return json.loads(served_local.read_text())
-    index_url = os.environ.get("FLATPAK_INDEX_URL", SERVED_INDEX_URL)
-    req = urllib.request.Request(index_url, headers={"User-Agent": "curl/7.88.1"})
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read().decode())
-    except Exception as exc:
-        raise unittest.SkipTest(f"Live catalog unavailable from {index_url}: {exc}") from exc
+    raise unittest.SkipTest("set FLATPAK_INDEX_FILE to a downloaded served index")
 
 
 class IndexTests(unittest.TestCase):
