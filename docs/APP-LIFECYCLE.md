@@ -1,6 +1,6 @@
 # Flatpak application lifecycle
 
-This repository contains index tooling and a reference snapshot. The
+This repository contains index tooling and checks. The
 `tunaos-org` Cloudflare Worker serves the production remote from `tuna-os/docs`
 at `https://tunaos.org/flatpak/`. Follow this distinction for every lifecycle
 change.
@@ -60,7 +60,7 @@ change.
 4. Run the production verification commands above. Check the app entry and
    metadata from the served index, not only the local OCI directory.
 
-For a local reference snapshot or a reviewed candidate index, run
+For a reviewed candidate index, run
 `scripts/update-index.py` with `--oci-dir`, `--index-file`, `--repo-name`, and
 `--tags`. Remember that this checkout is not the production source.
 
@@ -89,8 +89,7 @@ Retirement therefore needs a coordinated, reviewed production change.
    replacement or end-of-life notice.
 2. Stop future publisher updates through the application repository's normal
    maintainer-controlled process before you remove the production entry.
-3. Remove the app entry in `tuna-os/docs` through review. Do not treat a change
-   to this repository's reference snapshot as a retirement.
+3. Remove the app entry in `tuna-os/docs` through review.
 4. Run the served-index audit and verify the retired app is absent from the
    served index. Keep the retirement decision and date in the change record.
 
