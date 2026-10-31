@@ -111,24 +111,25 @@ application build failed.
 
 The production declaration at
 <https://tunaos.org/flatpak/expected-apps.json> is the source of app IDs and
-required architectures. Edit `static/flatpak/expected-apps.json` in
-`tuna-os/docs` when adding, renaming, or retiring an app, together with the
-production index and publisher changes described above. Use `id` for one app
-or `ids` for a registry entry that publishes multiple apps (such as the
-installer); `archs` applies to every declared ID. Keep optional future
-architectures in `archs_planned` until they are served.
+required architectures. When you add, rename, or retire an app, edit
+`static/flatpak/expected-apps.json` in `tuna-os/docs`. Make this change
+together with the production index and publisher changes described above. Use
+`id` for one app or `ids` for a registry entry that publishes multiple apps
+(such as the installer); `archs` applies to every declared ID. Keep optional
+future architectures in `archs_planned` until the remote serves them.
 
-Update this repository's README Available apps table to match those IDs
-exactly, including case. Do not add a local copy of the declaration. To check
-a proposed declaration before it is deployed:
+Update the Available apps table in this repository's README to match those
+IDs exactly, including case. Do not add a local copy of the declaration. To
+check a proposed declaration before the docs deploy publishes it:
 
 ```sh
 python3 scripts/catalog.py ../docs/static/flatpak/expected-apps.json --readme README.md
 python3 scripts/catalog.py ../docs/static/flatpak/expected-apps.json --index served-index.json
 ```
 
-PR CI checks README parity against the served declaration. The scheduled
-remote metadata check also requires every served registry and app ID to be
-declared, every ref's architecture to match its image, and every required
-ID/architecture pair to be served. Coordinate changes across the two
+On each pull request, CI compares the README IDs with the served declaration.
+The scheduled check of the remote also compares the served index with the
+declaration. Each served registry and app ID must be in the declaration. The
+architecture of each ref must match its image. The remote must serve each
+required pair of ID and architecture. Coordinate changes across the two
 repositories; a deployment between their merges can temporarily fail parity.
