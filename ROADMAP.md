@@ -6,10 +6,9 @@ This roadmap turns the TunaOS Flatpak remote into a single, reviewable
 distribution service. It covers index ownership and publication; application
 features and packaging roadmaps remain in their respective repositories.
 
-> **Actively maintained.** The near-term ownership decision below is still open
-> and has not been completed; this roadmap describes direction, not a finished
-> plan. The production index is served from `tuna-os/docs`; this repository is a
-> reference snapshot.
+> **Actively maintained.** The ownership decision in #171 names `tuna-os/docs`
+> as the production catalog owner. This repository supplies index tooling and
+> checks; it no longer keeps a reference snapshot.
 
 ## Current state
 
