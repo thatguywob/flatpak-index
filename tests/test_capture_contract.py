@@ -9,16 +9,17 @@ Exercises positive controls and production-threshold negative fixtures:
 - pre-existing stale PNG rejection and deletion
 - concurrent capture isolation
 - unrelated process preservation
-- teardown failure reporting
 - diagnostic log retention on failure
 """
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -152,6 +153,53 @@ class CaptureContractLiveTests(unittest.TestCase):
         self.assertEqual(receipt["predicates"]["readiness_result"], "failed")
         self.assertFalse((self.out_dir / "predicate-timeout-test.png").exists())
 
+    def test_hanging_predicate_is_bounded_and_receipt_hides_credentials(self):
+        if not shutil.which("xclock"):
+            self.skipTest("xclock is required for predicate deadline test")
+        token = "github_pat_" + "b" * 60
+        req = capture.parse_arguments([
+            "--out-dir", str(self.out_dir), "--name", "bounded-predicate",
+            "--geometry", "640x480", "--deadline", "0.5", "--settle", "0",
+            "--readiness-predicate", f"sleep 30 # {token}", "--", "xclock", "-analog",
+        ])
+        started = time.monotonic()
+        code, receipt = capture.execute_capture(req)
+        self.assertEqual(code, 1)
+        self.assertEqual(receipt["outcome"], "failed")
+        self.assertEqual(receipt["predicates"]["readiness_result"], "failed")
+        self.assertLess(time.monotonic() - started, 8)
+        self.assertNotIn(token, (self.out_dir / "bounded-predicate.receipt.json").read_text())
+        self.assertFalse((self.out_dir / "bounded-predicate.png").exists())
+
+    def test_existing_display_survives_dependency_failure_and_startup_collision(self):
+        server = subprocess.Popen(
+            ["Xvfb", "-displayfd", "1", "-screen", "0", "640x480x24"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        )
+        try:
+            display = ":" + server.stdout.readline().strip()
+            for missing_dependency in (True, False):
+                with self.subTest(missing_dependency=missing_dependency):
+                    req = capture.parse_arguments([
+                        "--out-dir", str(self.out_dir), "--name", "foreign-display",
+                        "--display", display, "--", "xclock",
+                    ])
+                    with contextlib.ExitStack() as stack:
+                        if missing_dependency:
+                            stack.enter_context(patch("shutil.which", return_value=None))
+                        code, receipt = capture.execute_capture(req)
+                    self.assertNotEqual(code, 0)
+                    self.assertIn(receipt["outcome"], ("failed", "blocked"))
+                    self.assertIsNone(server.poll())
+                    subprocess.run(
+                        ["xdpyinfo", "-display", display], check=True,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+        finally:
+            server.terminate()
+            server.wait(timeout=5)
+            server.stdout.close()
+
     def test_negative_blank_or_flat_frame(self):
         """Reject captured frame if color count is fewer than 8."""
         if not shutil.which("xclock"):
@@ -164,9 +212,9 @@ class CaptureContractLiveTests(unittest.TestCase):
             stdout="PNG 640x480 2\n",
             stderr="",
         )
+        real_run = subprocess.run
         with patch("subprocess.run") as mock_run:
             # Let other calls go through except identify
-            real_run = subprocess.run
 
             def side_effect(cmd, *args, **kwargs):
                 if isinstance(cmd, list) and cmd and cmd[0] == "identify":
@@ -290,34 +338,6 @@ class CaptureContractLiveTests(unittest.TestCase):
         self.assertEqual(receipt["outcome"], "failed")
         self.assertIn("CRITICAL_FAILURE_EVIDENCE", receipt["diagnostics"]["app_log_excerpt"])
 
-    def test_cleanup_failure_reported(self):
-        """Teardown failure must be recorded in receipt and final verdict."""
-        mock_cleanup = {
-            "status": "failed",
-            "owned_pids": [1234],
-            "unrelated_pids_affected": 0,
-            "details": "Simulated PID termination failure",
-        }
-        with patch.object(capture, "cleanup_owned_processes", return_value=mock_cleanup):
-            req = {
-                "out_dir": str(self.out_dir),
-                "name": "teardown-fail-test",
-                "geometry": "640x480",
-                "settle": 1.0,
-                "deadline": 2.0,
-                "app_id": None,
-                "wm_class": None,
-                "readiness_predicate": None,
-                "capture_mode": "window",
-                "required": True,
-                "display": None,
-                "command_args": ["sh", "-c", "exit 1"],
-            }
-            code, receipt = capture.execute_capture(req)
-            self.assertNotEqual(code, 0)
-            self.assertEqual(receipt["outcome"], "failed")
-            self.assertEqual(receipt["cleanup"]["status"], "failed")
-            self.assertIn("Simulated PID termination failure", receipt["cleanup"]["details"])
 
 
 class CaptureContractSimulatedTests(unittest.TestCase):

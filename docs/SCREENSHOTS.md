@@ -55,19 +55,19 @@ in-process harness written per toolkit.
 The action provides step outputs for pipeline verification:
 
 - `image`: Path to the captured PNG file.
-- `receipt`: Path to the versioned JSON receipt file.
+- `receipt`: Path to the JSON receipt, with its schema version.
 - `outcome`: Execution outcome (`passed`, `failed`, `blocked`, `not_run`, `unsupported`, `flaky`).
-- `window-id`: Observed X11 window ID.
+- `window-id`: ID of the observed X11 window.
 - `frame-hash`: SHA-256 digest of the captured frame.
-- `target-pid`: Observed target process ID.
+- `target-pid`: ID of the target process.
 
 ### Correctness contract
 
-- **Target readiness and window identity**: Matches the window by host PID or descendants, explicit `app-id`, or explicit `wm-class`. Flatpak and sandboxed PID namespaces use explicit or inferred application identity. It rejects unrelated windows and does not capture empty or wrong-window surfaces.
-- **Process liveness and late crash detection**: Detects exit before window mapping, enforces monotonic deadlines, and verifies app liveness and window integrity after paint settles.
-- **Rejection of stale output and atomic publishing**: Pre-existing PNG files at the target path are deleted before capture. Fresh output is published atomically on verified success. Failed captures do not write or retain a success-shaped PNG or receipt.
-- **Owned process cleanup**: Isolates temporary state in private directories and display numbers (:97 to :128). Terminates only owned processes and descendants. Unrelated processes stay untouched. Teardown failures are recorded in the receipt and verdict.
-- **Versioned evidence receipt**: Writes a versioned JSON receipt (`schema_version: 1`) that records source and action revisions, run and attempt numbers, requested and observed identities, executable binary digest, environment details, frame hash, timing, diagnostics, and outcome.
+- **Target identity**: Matches the host PID or descendants, explicit `app-id`, or explicit `wm-class`. Sandboxed apps use explicit or inferred identity. It rejects unrelated windows and blank surfaces.
+- **Process state and deadlines**: Checks app state before the window appears and after paint settles. A monotonic deadline limits the time for each readiness command. A timed-out predicate loses its own process group.
+- **Output integrity**: Deletes old PNG files before capture. After verification, it publishes output with an atomic file move. Failed captures produce a failure receipt, not a success image.
+- **Owned cleanup**: Keeps temporary state in private directories. Stops only owned processes and descendants. Xvfb removes its own socket and lock. The script does not remove shared X11 paths. If a display is in use, capture fails and leaves that server intact. The receipt shows all errors from teardown.
+- **Evidence receipt**: Writes JSON with `schema_version: 1`. Records source and action revisions, run identifiers, requested and observed identities, executable digest, environment, frame hash, and times. It also records diagnostics and outcome. It redacts recognized credentials in commands, predicate fields, logs, and errors.
 
 An app that renders its own screens more precisely should keep that setup.
 `tuna-installer-kde` renders each wizard step from the real QML module with

@@ -71,15 +71,16 @@ def redact_sensitive(text: str | None) -> str | None:
     """Mask tokens, passwords, and secrets in strings."""
     if not text:
         return text
-    patterns = [
+    result = re.sub(
+        r"(?i)\b(?:ghp_[a-zA-Z0-9]{36,}|github_pat_[a-zA-Z0-9_]{60,})",
+        "***REDACTED***",
+        text,
+    )
+    for pattern in (
         r"(?i)(--?(?:token|password|auth|secret|key|api[-_]?key)[=\s]+)(\S+)",
-        r"(?i)(ghp_[a-zA-Z0-9]{36,})",
-        r"(?i)(github_pat_[a-zA-Z0-9_]{60,})",
         r"(?i)(bearer\s+)([a-zA-Z0-9._~+/-]+=*)",
-    ]
-    result = text
-    for p in patterns:
-        result = re.sub(p, r"\1***REDACTED***", result)
+    ):
+        result = re.sub(pattern, r"\1***REDACTED***", result)
     return result
 
 
@@ -310,9 +311,8 @@ def is_window_valid(wid: str, display: str) -> bool:
 def cleanup_owned_processes(
     xvfb_proc: subprocess.Popen | None,
     app_proc: subprocess.Popen | None,
-    display_num: str | None,
 ) -> dict[str, Any]:
-    """Terminate only owned processes and remove display lock resources."""
+    """Terminate owned processes; let Xvfb remove its own display resources."""
     cleanup_status = "success"
     cleanup_details = "All owned processes terminated successfully"
     owned_pids: set[int] = set()
@@ -337,6 +337,9 @@ def cleanup_owned_processes(
     # Wait bounded time for processes to exit
     deadline = time.monotonic() + 2.0
     while time.monotonic() < deadline:
+        for proc in (app_proc, xvfb_proc):
+            if proc:
+                proc.poll()
         alive = [p for p in owned_pids if is_pid_alive(p)]
         if not alive:
             break
@@ -357,18 +360,6 @@ def cleanup_owned_processes(
         if still_alive:
             cleanup_status = "failed"
             cleanup_details = f"Failed to terminate owned PIDs: {still_alive}"
-
-    # Remove X11 lock files and socket if owned
-    if display_num:
-        disp_idx = display_num.lstrip(":")
-        lock_file = Path(f"/tmp/.X{disp_idx}-lock")
-        socket_file = Path(f"/tmp/.X11-unix/X{disp_idx}")
-        with contextlib.suppress(Exception):
-            if lock_file.exists():
-                lock_file.unlink()
-        with contextlib.suppress(Exception):
-            if socket_file.exists():
-                socket_file.unlink()
 
     return {
         "status": cleanup_status,
@@ -395,6 +386,8 @@ def parse_arguments(argv: list[str]) -> dict[str, Any]:
     parser.add_argument("--capture-mode", default=None)
     parser.add_argument("--required", default=None)
     parser.add_argument("--display", default=None)
+    parser.add_argument("legacy_out_dir", nargs="?")
+    parser.add_argument("legacy_name", nargs="?")
 
     # Separate options from command following '--'
     options_part = []
@@ -406,26 +399,17 @@ def parse_arguments(argv: list[str]) -> dict[str, Any]:
     else:
         options_part = argv
 
-    # Handle legacy positional arguments: <out-dir> <name>
-    positional_args = []
-    flag_args = []
-    for arg in options_part:
-        if arg.startswith("-"):
-            flag_args.append(arg)
-        else:
-            positional_args.append(arg)
-
-    parsed_flags, _ = parser.parse_known_args(flag_args)
+    parsed_flags, _ = parser.parse_known_args(options_part)
 
     out_dir = (
         parsed_flags.out_dir
-        or (positional_args[0] if len(positional_args) > 0 else None)
+        or parsed_flags.legacy_out_dir
         or os.environ.get("OUT_DIR")
         or "docs/screenshots"
     )
     name = (
         parsed_flags.name
-        or (positional_args[1] if len(positional_args) > 1 else None)
+        or parsed_flags.legacy_name
         or os.environ.get("APP_NAME")
     )
     # Check geometry from flags or environment
@@ -539,7 +523,7 @@ def execute_capture(req: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     }
 
     predicates_info: dict[str, Any] = {
-        "readiness_predicate": req["readiness_predicate"],
+        "readiness_predicate": redact_sensitive(req["readiness_predicate"]),
         "readiness_result": "not_applicable" if not req["readiness_predicate"] else "failed",
     }
 
@@ -554,6 +538,10 @@ def execute_capture(req: dict[str, Any]) -> tuple[int, dict[str, Any]]:
 
         if not display_num:
             display_num = pick_display()
+        display_index = display_num.lstrip(":")
+        display_lock = Path(f"/tmp/.X{display_index}-lock")
+        if display_lock.exists() or Path(f"/tmp/.X11-unix/X{display_index}").exists():
+            raise DisplayInitError(f"X display {display_num} is already in use")
 
         # Start Xvfb in its own process group
         geom_str = req["geometry"]
@@ -578,7 +566,11 @@ def execute_capture(req: dict[str, Any]) -> tuple[int, dict[str, Any]]:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                 )
-                if res.returncode == 0:
+                if (
+                    res.returncode == 0
+                    and display_lock.read_text().strip() == str(xvfb_proc.pid)
+                    and xvfb_proc.poll() is None
+                ):
                     x_ready = True
                     break
             time.sleep(0.1)
@@ -677,17 +669,30 @@ def execute_capture(req: dict[str, Any]) -> tuple[int, dict[str, Any]]:
                 if not is_window_valid(matching_wid, display_num):
                     raise WindowDestroyedError("Target window was destroyed during readiness wait")
 
-                res = subprocess.run(
+                remaining = overall_deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                with subprocess.Popen(
                     req["readiness_predicate"],
                     shell=True,
                     env=app_env,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                )
-                if res.returncode == 0:
-                    pred_passed = True
-                    break
-                time.sleep(0.2)
+                    start_new_session=True,
+                ) as predicate:
+                    try:
+                        predicate.wait(timeout=remaining)
+                    except subprocess.TimeoutExpired:
+                        with contextlib.suppress(ProcessLookupError):
+                            os.killpg(predicate.pid, signal.SIGKILL)
+                        predicate.wait()
+                        raise ReadinessTimeoutError(
+                            "Readiness predicate did not pass within deadline"
+                        ) from None
+                    if predicate.returncode == 0:
+                        pred_passed = True
+                        break
+                time.sleep(min(0.2, max(0.0, overall_deadline - time.monotonic())))
 
             if not pred_passed:
                 raise ReadinessTimeoutError("Readiness predicate did not pass within deadline")
@@ -756,13 +761,13 @@ def execute_capture(req: dict[str, Any]) -> tuple[int, dict[str, Any]]:
 
     except DependencyMissingError as e:
         outcome = "blocked"
-        error_message = str(e)
+        error_message = redact_sensitive(str(e))
     except Exception as e:
         outcome = "failed"
-        error_message = str(e)
+        error_message = redact_sensitive(str(e))
     finally:
         # Perform owned cleanup
-        cleanup_info = cleanup_owned_processes(xvfb_proc, app_proc, display_num)
+        cleanup_info = cleanup_owned_processes(xvfb_proc, app_proc)
         if cleanup_info.get("status") == "failed" and outcome == "passed":
             outcome = "failed"
             error_message = f"Cleanup failed: {cleanup_info.get('details')}"
@@ -854,7 +859,7 @@ def execute_capture(req: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     if outcome != "passed":
         sys.stderr.write(f"capture-app: error: {error_message}\n")
         if app_log_text:
-            sys.stderr.write(f"--- app log excerpt ---\n{app_log_text}\n")
+            sys.stderr.write(f"--- app log excerpt ---\n{redact_sensitive(app_log_text)}\n")
 
     if outcome == "passed":
         exit_code = 0

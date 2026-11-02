@@ -63,6 +63,18 @@ class CaptureArgumentParsingTests(unittest.TestCase):
         self.assertFalse(parsed["required"])
         self.assertEqual(parsed["command_args"], ["flatpak", "run", "org.tunaos.tavern"])
 
+    def test_space_separated_options_keep_values_with_legacy_paths(self):
+        parsed = capture.parse_arguments([
+            "docs/shots", "main", "--deadline", "15", "--settle", "0.5",
+            "--readiness-predicate", "test -f ready.txt", "--", "xclock", "-analog",
+        ])
+        self.assertEqual(parsed["out_dir"], "docs/shots")
+        self.assertEqual(parsed["name"], "main")
+        self.assertEqual(parsed["deadline"], 15.0)
+        self.assertEqual(parsed["settle"], 0.5)
+        self.assertEqual(parsed["readiness_predicate"], "test -f ready.txt")
+        self.assertEqual(parsed["command_args"], ["xclock", "-analog"])
+
     def test_environment_variable_fallbacks(self):
         env = {
             "OUT_DIR": "env/dir",
@@ -208,6 +220,14 @@ class RedactionAndProvenanceTests(unittest.TestCase):
         self.assertNotIn("secret123", redacted)
         self.assertIn("***REDACTED***", redacted)
 
+    def test_redacts_standalone_github_credentials_without_preserving_token(self):
+        for token in ("ghp_" + "a" * 36, "github_pat_" + "b" * 60):
+            with self.subTest(prefix=token.split("_")[0]):
+                self.assertEqual(
+                    capture.redact_sensitive(f"before {token} after"),
+                    "before ***REDACTED*** after",
+                )
+
     def test_binary_provenance_verified_for_existing_executable(self):
         prov = capture.resolve_binary_provenance(["python3"])
         self.assertEqual(prov["digest_status"], "verified")
@@ -278,7 +298,7 @@ class ProcessCleanupTests(unittest.TestCase):
             patch("os.killpg") as mock_killpg,
             patch("pathlib.Path.unlink"),
         ):
-            res = capture.cleanup_owned_processes(mock_xvfb, mock_app, ":99")
+            res = capture.cleanup_owned_processes(mock_xvfb, mock_app)
             self.assertEqual(res["status"], "success")
             self.assertEqual(res["owned_pids"], [2001, 2002, 2003])
             self.assertEqual(res["unrelated_pids_affected"], 0)

@@ -50,7 +50,8 @@ Never post account credentials or API keys in issues or pull requests.
 | Mandelbrot | `flatpak install tuna-os org.tunaos.mandelbrot` |
 | Tavern | `flatpak install tuna-os org.tunaos.tavern` |
 | Compass | `flatpak install tuna-os org.tunaos.compass` |
-| BlueShell | `flatpak install tuna-os org.tunaos.BlueShell` |
+| Quickcast | `flatpak install tuna-os org.tunaos.Quickcast` |
+| BlueShell | `flatpak install tuna-os org.tunaos.blueshell` |
 | Ghostty | `flatpak install tuna-os com.mitchellh.ghostty` |
 | Installer (bootc-installer) | `flatpak install tuna-os org.bootcinstaller.Installer` |
 | Installer (KDE) | `flatpak install tuna-os org.tunaos.InstallerKde` |
@@ -58,7 +59,7 @@ Never post account credentials or API keys in issues or pull requests.
 | Installer (COSMIC) | `flatpak install tuna-os org.tunaos.InstallerCosmic` |
 | Installer (XFCE) | `flatpak install tuna-os org.tunaos.InstallerXfce` |
 
-> The installer frontends drive the [fisherman](https://github.com/projectbluefin/fisherman)
+> The installer frontends drive the [fisherman](https://github.com/tuna-os/fisherman)
 > bootc backend. The matching TunaOS live ISOs include these frontends
 > (see `build_scripts/installer-frontend.sh` in [tuna-os/tunaOS](https://github.com/tuna-os/tunaOS)).
 
@@ -316,4 +317,4 @@ The `index/static` file is a JSON array with OCI image references. Each entry ma
 
 > **Note:** The authoritative index is `static/flatpak/index/static` in the [tuna-os/docs](https://github.com/tuna-os/docs) repo, served at <https://tunaos.org/flatpak/>. The copy of `index/static` in this repo is a **historical snapshot**, not what the remote serves. Treat it as reference only; the table (and tunaos.org) reflect the live remote.
 >
-> **This repo's [GitHub Pages site](https://tuna-os.github.io/flatpak-index/) and root `tuna-os.flatpakrepo` file are a non-authoritative snapshot.** Do not use `flatpak remote-add` on that URL or file. Always use the remote URL <https://tunaos.org/flatpak/tuna-os.flatpakrepo> from the [top of this README](#tunaos-flatpak-index).
+> **This repo's [GitHub Pages site](https://tuna-os.github.io/flatpak-index/) and root `tuna-os.flatpakrepo` file are a non-authoritative snapshot.** Do not use `flatpak remote-add` on that URL or file. Always use the remote URL <https://tunaos.org/flatpak/tuna-os.flatpakrepo> from the [top of this README](#available-apps).
