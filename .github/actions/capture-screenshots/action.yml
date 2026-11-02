@@ -96,7 +96,8 @@ runs:
           # xdpyinfo, not xorg-x11-utils: Fedora retired that umbrella package
           # and split it per-utility, so installing it fails outright.
           dnf -y install --setopt=install_weak_deps=False \
-            xorg-x11-server-Xvfb xdpyinfo xdotool ImageMagick python3 procps-ng
+            xorg-x11-server-Xvfb xdpyinfo xprop xwininfo xdotool \
+            ImageMagick python3 procps-ng
         else
           sudo apt-get update -qq
           sudo apt-get install -y -qq xvfb x11-utils xdotool imagemagick python3 procps

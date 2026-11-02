@@ -492,7 +492,9 @@ def execute_capture(req: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     tmp_dir.chmod(0o700)
     xvfb_log = tmp_dir / "xvfb.log"
     app_log = tmp_dir / "app.log"
-    staging_png = tmp_dir / "staging.png"
+    # Rename publication must stay on the output filesystem, even for bind mounts.
+    staging_dir = Path(tempfile.mkdtemp(prefix=".capture-frame-", dir=out_path))
+    staging_png = staging_dir / "staging.png"
 
     xvfb_proc: subprocess.Popen | None = None
     app_proc: subprocess.Popen | None = None
@@ -532,7 +534,15 @@ def execute_capture(req: dict[str, Any]) -> tuple[int, dict[str, Any]]:
 
     try:
         # Check external dependencies
-        for tool in ("Xvfb", "xdpyinfo", "xdotool", "import", "identify"):
+        for tool in (
+            "Xvfb",
+            "xdpyinfo",
+            "xprop",
+            "xwininfo",
+            "xdotool",
+            "import",
+            "identify",
+        ):
             if not shutil.which(tool):
                 raise DependencyMissingError(f"Required tool '{tool}' is not installed")
 
@@ -843,6 +853,7 @@ def execute_capture(req: dict[str, Any]) -> tuple[int, dict[str, Any]]:
 
     # Clean up private temporary directory
     shutil.rmtree(tmp_dir, ignore_errors=True)
+    shutil.rmtree(staging_dir, ignore_errors=True)
 
     # Set GITHUB_OUTPUT if available
     gh_output = os.environ.get("GITHUB_OUTPUT")

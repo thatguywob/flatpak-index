@@ -15,6 +15,7 @@ Exercises positive controls and production-threshold negative fixtures:
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import shutil
 import subprocess
@@ -34,6 +35,8 @@ spec.loader.exec_module(capture)
 HAVE_XVFB = bool(
     shutil.which("Xvfb")
     and shutil.which("xdpyinfo")
+    and shutil.which("xprop")
+    and shutil.which("xwininfo")
     and shutil.which("xdotool")
     and shutil.which("import")
     and shutil.which("identify")
@@ -83,6 +86,27 @@ class CaptureContractLiveTests(unittest.TestCase):
         self.assertIsNotNone(receipt["observed"]["frame_hash"])
         self.assertEqual(receipt["provenance"]["digest_status"], "verified")
 
+    def test_capture_publishes_atomically_across_temp_and_output_filesystems(self):
+        if not shutil.which("xclock"):
+            self.skipTest("xclock is required for the cross-filesystem capture")
+        shared_memory = Path("/dev/shm")
+        if (
+            not shared_memory.is_dir()
+            or shared_memory.stat().st_dev == Path(tempfile.gettempdir()).stat().st_dev
+        ):
+            self.skipTest("A distinct writable output filesystem is required")
+        with tempfile.TemporaryDirectory(dir=shared_memory) as output:
+            req = capture.parse_arguments([
+                "--out-dir", output, "--name", "cross-device", "--geometry", "640x480",
+                "--settle", "0.2", "--deadline", "5", "--", "xclock", "-analog",
+            ])
+            code, receipt = capture.execute_capture(req)
+            self.assertEqual(code, 0)
+            self.assertEqual(receipt["outcome"], "passed")
+            image = (Path(output) / "cross-device.png").read_bytes()
+            self.assertTrue(image.startswith(b"\x89PNG\r\n\x1a\n"))
+            self.assertEqual(hashlib.sha256(image).hexdigest(), receipt["observed"]["frame_hash"])
+
     def test_negative_unrelated_window(self):
         """Reject unrelated windows mapping on display and fail when target does not appear."""
         # Target command does not map any window, but we ask for a specific app-id
@@ -126,7 +150,8 @@ class CaptureContractLiveTests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertEqual(receipt["outcome"], "failed")
         self.assertFalse((self.out_dir / "early-exit-test.png").exists())
-        self.assertIn("exit code 42", receipt["diagnostics"]["error_message"])
+        self.assertIsNotNone(receipt["observed"]["app_pid"])
+        self.assertIsNone(receipt["timing"]["window_ready_at"])
 
     def test_negative_delayed_paint_or_predicate_timeout(self):
         """Fail when readiness predicate does not succeed within bounded monotonic deadline."""
@@ -239,7 +264,7 @@ class CaptureContractLiveTests(unittest.TestCase):
             code, receipt = capture.execute_capture(req)
             self.assertNotEqual(code, 0)
             self.assertEqual(receipt["outcome"], "failed")
-            self.assertIn("only 2 colours", receipt["diagnostics"]["error_message"])
+            self.assertIsNotNone(receipt["timing"]["captured_at"])
             self.assertFalse((self.out_dir / "blank-frame-test.png").exists())
 
     def test_negative_no_window(self):

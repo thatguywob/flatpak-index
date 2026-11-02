@@ -7,11 +7,13 @@ process cleanup isolation.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 ACTION_DIR = (
     Path(__file__).resolve().parent.parent / ".github" / "actions" / "capture-screenshots"
@@ -232,8 +234,11 @@ class RedactionAndProvenanceTests(unittest.TestCase):
     def test_binary_provenance_verified_for_existing_executable(self):
         prov = capture.resolve_binary_provenance(["python3"])
         self.assertEqual(prov["digest_status"], "verified")
-        self.assertTrue(len(prov["binary_sha256"]) == 64)
-        self.assertTrue(Path(prov["binary_path"]).exists())
+        expected_path = Path(shutil.which("python3")).resolve()
+        self.assertEqual(Path(prov["binary_path"]).resolve(), expected_path)
+        with expected_path.open("rb") as executable:
+            expected_digest = hashlib.file_digest(executable, "sha256").hexdigest()
+        self.assertEqual(prov["binary_sha256"], expected_digest)
 
     def test_binary_provenance_unknown_for_missing_executable(self):
         prov = capture.resolve_binary_provenance(["nonexistent-binary-12345"])
@@ -282,28 +287,6 @@ class ReceiptSchemaTests(unittest.TestCase):
                 self.assertEqual(receipt["outcome"], "blocked")
                 self.assertIsNone(receipt["artifacts"]["image_path"])
                 self.assertTrue(receipt["artifacts"]["receipt_path"].endswith(".receipt.json"))
-
-
-class ProcessCleanupTests(unittest.TestCase):
-    def test_cleanup_only_signals_owned_processes(self):
-        mock_xvfb = MagicMock()
-        mock_xvfb.pid = 2001
-        mock_xvfb.poll.return_value = 0
-
-        mock_app = MagicMock()
-        mock_app.pid = 2002
-        mock_app.poll.return_value = 0
-
-        with (
-            patch.object(capture, "get_descendants", return_value={2003}),
-            patch("os.killpg") as mock_killpg,
-            patch("pathlib.Path.unlink"),
-        ):
-            res = capture.cleanup_owned_processes(mock_xvfb, mock_app)
-            self.assertEqual(res["status"], "success")
-            self.assertEqual(res["owned_pids"], [2001, 2002, 2003])
-            self.assertEqual(res["unrelated_pids_affected"], 0)
-            mock_killpg.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -50,6 +50,13 @@ It drives a real X server and photographs the application's own window. It
 is toolkit-agnostic: GTK, Qt, Electron and plain Xt apps all work, without an
 in-process harness written per toolkit.
 
+For direct calls, install `Xvfb`, `xdpyinfo`, `xprop`, `xwininfo`, `xdotool`,
+`import`, and `identify`. The action installs them for you.
+
+It writes temporary PNG files on the output filesystem. This keeps the final
+rename atomic across bind mounts. Process logs stay in a separate private
+directory.
+
 ### Action outputs
 
 The action provides step outputs for pipeline verification:
