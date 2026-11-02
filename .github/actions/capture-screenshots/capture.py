@@ -399,7 +399,7 @@ def parse_arguments(argv: list[str]) -> dict[str, Any]:
     else:
         options_part = argv
 
-    parsed_flags, _ = parser.parse_known_args(options_part)
+    parsed_flags, _ = parser.parse_known_intermixed_args(options_part)
 
     out_dir = (
         parsed_flags.out_dir

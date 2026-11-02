@@ -65,11 +65,12 @@ class CaptureArgumentParsingTests(unittest.TestCase):
 
     def test_space_separated_options_keep_values_with_legacy_paths(self):
         parsed = capture.parse_arguments([
-            "docs/shots", "main", "--deadline", "15", "--settle", "0.5",
+            "docs/shots", "--geometry=800x600", "main", "--deadline", "15", "--settle", "0.5",
             "--readiness-predicate", "test -f ready.txt", "--", "xclock", "-analog",
         ])
         self.assertEqual(parsed["out_dir"], "docs/shots")
         self.assertEqual(parsed["name"], "main")
+        self.assertEqual(parsed["geometry"], "800x600")
         self.assertEqual(parsed["deadline"], 15.0)
         self.assertEqual(parsed["settle"], 0.5)
         self.assertEqual(parsed["readiness_predicate"], "test -f ready.txt")
