@@ -13,7 +13,7 @@ change.
   publisher workflow changes.
 - Treat `tuna-os/docs/static/flatpak/index/static` as production. Do not expect
   edits to this repository's `index/static` snapshot to change the live remote.
-- Follow the [publishing migration](PUBLISHING.md). New application publishers
+- Follow the [publisher migration](PUBLISHING.md). New application publishers
   need only package access to their own GHCR image, with no docs write token.
 
 ## Add an application
@@ -22,8 +22,9 @@ change.
    repository. Use the metadata and screenshot guides in this repository.
 2. Configure the application publisher to build an OCI layout and push the
    image to GHCR with its own repository token. Register its exact repository,
-   tag, architecture, and Flatpak ref in the reviewed docs-side source policy.
-   The docs-side refresh owns production index writes; see [Publishing](PUBLISHING.md).
+   tag, architecture, and Flatpak ref in the reviewed source policy in
+   `tuna-os/docs`. The docs-side refresh owns the writes to the production
+   index; see [`PUBLISHING.md`](PUBLISHING.md).
 
 3. Review the application change and publisher output together. The index
    entry must carry both Flatpak labels and AppStream labels.

@@ -27,18 +27,18 @@ For the add, update, pause, and retire workflow, see the [application lifecycle 
 ## Trust model
 
 The remote is **unsigned and authenticated only by HTTPS**. It has no GPG key
-or published cosign/Sigstore verification policy. The index pins OCI images by
+or published cosign/Sigstore verification policy. The index pins the OCI images by
 digest, which identifies their bytes; it does not authenticate who selected
 those digests. Flatpak does not independently verify this index's publisher.
 Users trust the `tuna-os/docs` writers, its CI and deployment credentials,
 Cloudflare, and the GHCR package publishers. A compromised index writer can
 replace any app, including the installers that run privileged disk operations.
 
-Signing and client verification are deferred to a separate change, per the
-[maintainer decision in #25](https://github.com/tuna-os/flatpak-index/issues/25).
-The credential migration is described in [Publishing](docs/PUBLISHING.md).
+The [maintainer decision in #25](https://github.com/tuna-os/flatpak-index/issues/25)
+defers signatures and client verification to a separate change.
+[`docs/PUBLISHING.md`](docs/PUBLISHING.md) describes the credential migration.
 The pull-based tooling below is a migration target; it does not revoke the
-shared credentials already installed in application repositories.
+shared credentials that application repositories already hold.
 
 <!-- hive-contribute-plea: donated-compute appeal, keep in sync across repos -->
 ## Contribute compute — no code needed
@@ -214,15 +214,15 @@ jobs:
           skopeo copy oci:<app>.oci docker://ghcr.io/tuna-os/<app>:latest
 ```
 
-Publishers stop after uploading their OCI image to GHCR. They must not check
-out or push to `tuna-os/docs`, and need no cross-repository publishing secret.
+Publishers stop after they upload their OCI image to GHCR. They must not check
+out or push to `tuna-os/docs`, and need no cross-repository secret for publication.
 Use the repository's own `GITHUB_TOKEN` with `packages: write` for its package.
 
 ### 4. Register the source with the index owner
 
 Submit a reviewed policy entry in `tuna-os/docs/.github/flatpak-sources.json`
 binding the GHCR repository and tag to the exact Flatpak ref and OCI
-architecture. See [Publishing](docs/PUBLISHING.md) for the policy format,
+architecture. See [`docs/PUBLISHING.md`](docs/PUBLISHING.md) for the policy format,
 receiver workflow, migration order, and credential revocation checklist.
 
 The docs-side workflow pulls only approved public images and updates the
@@ -241,7 +241,7 @@ The CI will:
 1. Build the flatpak in the GNOME 50 container
 2. Export it as an OCI image
 3. Push to `ghcr.io/tuna-os/<app>:latest`
-4. The docs-side refresh workflow pulls approved images and updates
+4. The docs-side refresh workflow then pulls approved images and updates
    `tuna-os/docs/static/flatpak/index/static` after the migration is installed
 5. The `tunaos-org` Cloudflare Worker publishes the new assets at `tunaos.org`
 
